@@ -18,7 +18,7 @@ __status__ 		= "Prototype"
 
 from scapy.all import *
 from binascii import a2b_hex, b2a_hex
-from pbkdf2_math import pbkdf2_hex
+# from pbkdf2_math import pbkdf2_hex
 from pbkdf2 import *
 from numpy import array_split
 from numpy import array
@@ -40,16 +40,73 @@ def customPRF512(key,A,B):
 # Read capture file -- it contains beacon, authentication, associacion, handshake and data
 wpa=rdpcap("wpa_handshake.cap") 
 
+
+def normalizeMac(mac):
+    return a2b_hex(mac.replace(":", ""))
+
+
+def findSSIDs(packets):
+    SSIDs = []
+
+    for packet in packets: 
+        # The SSID is advertized in Beacons
+        if Dot11Beacon in packet and Dot11Elt in packet[Dot11Beacon]:
+            packet = packet[Dot11Beacon]
+            packet = packet[Dot11Elt]
+            if packet.ID == 0: # SSID
+                SSIDs.append(packet.info.decode())
+
+    return SSIDs
+
+
+def getAPMACs(packets):
+    MACs = []
+
+    for packet in packets: 
+        # Only ap sends beacons. So we know it's an ap
+        if Dot11Beacon in packet and Dot11Elt in packet[Dot11Beacon]:
+            MACs.append(normalizeMac(packet.addr2))
+
+    return MACs
+
+
+def findClients(packets):
+    MACs = []
+
+    for packet in packets:
+        if Dot11Auth in packet:
+            if packet[Dot11Auth].seqnum == 2:
+                MACs.append(normalizeMac(packet.addr1))
+
+    return MACs
+
+
+def findNonce(packets, sourceMac):
+    nonces = []
+
+    for packet in packets:
+        if EAPOL in packet and normalizeMac(packet.addr2) == sourceMac:
+            nonces.append(packet[Raw].load[13:45])
+    return nonces
+
+
+
+
 # Important parameters for key derivation - most of them can be obtained from the pcap file
 passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
-ssid        = "SWI"
-APmac       = a2b_hex("cebcc8fdcab7")
-Clientmac   = a2b_hex("0013efd015bd")
+ssid        = findSSIDs(wpa)[0]
+APmac       = getAPMACs(wpa)[0]
+Clientmac   = findClients(wpa)[0]
+
+
+
+
+
 
 # Authenticator and Supplicant Nonces
-ANonce      = a2b_hex("90773b9a9661fee1f406e8989c912b45b029c652224e8b561417672ca7e0fd91")
-SNonce      = a2b_hex("7b3826876d14ff301aee7c1072b5e9091e21169841bce9ae8a3f24628f264577")
+ANonce      = findNonce(wpa, APmac)[0]
+SNonce      = findNonce(wpa, Clientmac)[0]
 
 # This is the MIC contained in the 4th frame of the 4-way handshake
 # When attacking WPA, we would compare it to our own MIC calculated using passphrases from a dictionary
