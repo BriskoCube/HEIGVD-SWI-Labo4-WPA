@@ -41,10 +41,12 @@ def customPRF512(key,A,B):
 wpa=rdpcap("wpa_handshake.cap") 
 
 
+# Transform mac from string with semicolon to binary string
 def normalizeMac(mac):
     return a2b_hex(mac.replace(":", ""))
 
 
+# Return an array of SSIDs found in packets. 
 def findSSIDs(packets):
     SSIDs = []
 
@@ -58,7 +60,7 @@ def findSSIDs(packets):
 
     return SSIDs
 
-
+# Return list a APs MACs found in packets
 def getAPMACs(packets):
     MACs = []
 
@@ -70,26 +72,31 @@ def getAPMACs(packets):
     return MACs
 
 
+# Return a list of clients MACs
 def findClients(packets):
     MACs = []
 
     for packet in packets:
         if Dot11Auth in packet:
+            # Client start authentication with AP. seqnum = 2 so we know that the client MAC is addr1
             if packet[Dot11Auth].seqnum == 2:
                 MACs.append(normalizeMac(packet.addr1))
 
     return MACs
 
 
+# Return a list of nonce emitted from a specific MAC
 def findNonce(packets, sourceMac):
     nonces = []
 
     for packet in packets:
+        # Nonces can be found in EAPOL frames
         if EAPOL in packet and normalizeMac(packet.addr2) == sourceMac:
+            # Extract nonce from raw value
             nonces.append(packet[Raw].load[13:45])
     return nonces
 
-
+# Return a list of MICs emitted from a specific MAC
 def findMiC(packets, sourceMac):
     mics = []
 
@@ -97,19 +104,6 @@ def findMiC(packets, sourceMac):
         if EAPOL in packet and normalizeMac(packet.addr2) == sourceMac:
             mics.append(packet[Raw].load[77:-2])
     return mics
-
-
-def get_packet_layers(packet):
-    counter = 0
-    print(packet.summary())
-    while True:
-        layer = packet.getlayer(counter)
-        if layer is None:
-            break
-
-        print(layer.summary())
-
-        counter += 1
 
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
