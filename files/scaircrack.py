@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
+Modified by: Julien Quartier & Nathan Séville
+
+
 Derive WPA keys from Passphrase and 4-way handshake info
 
 Calcule un MIC d'authentification (le MIC pour la transmission de données
